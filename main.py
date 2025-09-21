@@ -568,7 +568,7 @@ Presenta esta información de forma detallada y atractiva con emojis."""
 # Instanciar agente
 ai_agent = AIAgent()
 
-@app.post("/webhook/whatsapp")
+@app.post("/webhook")
 def whatsapp_webhook(Body: str = Form(...), From: str = Form(...)):
     """Webhook para WhatsApp"""
     try:
@@ -580,7 +580,7 @@ def whatsapp_webhook(Body: str = Form(...), From: str = Form(...)):
         print(f"❌ Error: {e}")
         return {"message": "Lo siento, hubo un error. Intenta de nuevo."}
 
-@app.get("/webhook/whatsapp")
+@app.get("/webhook")
 def verify_whatsapp_webhook(
     mode: str = Query(alias="hub.mode"), 
     token: str = Query(alias="hub.verify_token"),
