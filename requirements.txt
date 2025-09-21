@@ -1,12 +1,20 @@
-fastapi==0.104.1fastapifastapi==0.104.1fastapi==0.104.1fastapifastapi==0.104.1fastapi
+fastapi==0.117.1fastapi==0.104.1fastapifastapi==0.104.1fastapi==0.104.1fastapifastapi==0.104.1fastapi
 
-uvicorn[standard]==0.24.0
+uvicorn==0.36.0
 
-python-multipart==0.0.6uvicorn[standard]
+python-multipart==0.0.20uvicorn[standard]==0.24.0
 
-sqlalchemy==2.0.23
+sqlalchemy==2.0.43
 
-python-dotenv==1.0.0python-multipartuvicorn[standard]==0.24.0
+python-dotenv==1.1.1python-multipart==0.0.6uvicorn[standard]
+
+pandas==2.3.2
+
+openpyxl==3.1.5sqlalchemy==2.0.23
+
+requests==2.32.5
+
+openai==1.108.1python-dotenv==1.0.0python-multipartuvicorn[standard]==0.24.0
 
 pandas==2.1.3
 
