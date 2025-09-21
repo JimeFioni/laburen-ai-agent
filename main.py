@@ -8,7 +8,6 @@ import json
 import os
 import requests
 from datetime import datetime
-from openai import OpenAI
 from dotenv import load_dotenv
 
 # Cargar variables de entorno
@@ -319,171 +318,114 @@ def health():
     return {"status": "ok"}
 
 import requests
-from openai import OpenAI
+import google.generativeai as genai
 
 # Agente de IA inteligente que consume la API
 class AIAgent:
     def __init__(self):
-        self.api_key = os.getenv('OPENAI_API_KEY', '')
-        self.client = OpenAI(api_key=self.api_key) if self.api_key else None
+        self.api_key = os.getenv('GEMINI_API_KEY', '')
+        if self.api_key:
+            genai.configure(api_key=self.api_key)
+            self.model = genai.GenerativeModel('gemini-1.5-flash')
+        else:
+            self.model = None
         self.base_url = "http://localhost:8000"
         
     def process_message(self, message: str, phone: str) -> str:
-        """Procesa mensajes usando OpenAI y consume la API"""
+        """Procesa mensajes usando Gemini y consume la API"""
         
-        # Si no hay API key de OpenAI, usar lógica simple
-        if not self.client:
+        # Si no hay API key de Gemini, usar lógica simple
+        if not self.model:
             return self._simple_logic(message)
         
-        # Usar OpenAI con funciones para consumir la API
+        # Usar Gemini para procesar el mensaje
         try:
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """Eres un asistente de ventas de Laburen.com. 
-                        
-Tienes acceso a estas funciones:
-- get_products: Lista productos con filtro opcional
-- get_product_detail: Detalle de un producto específico  
-- create_cart: Crea un carrito con productos
-- update_cart: Actualiza un carrito existente
+            # Crear el prompt con información sobre las funciones disponibles
+            system_prompt = """Eres un asistente de ventas de Laburen.com. 
 
-IMPORTANTE:
+Tienes acceso a estas funciones de API:
+- GET /products: Lista productos (opcional ?search=término)
+- GET /products/{id}: Detalle de producto específico
+- POST /carts: Crea carrito con productos
+- PATCH /carts/{id}: Actualiza carrito existente
+
+INSTRUCCIONES:
 - Siempre sé amigable y usa emojis
 - Ayuda al cliente a encontrar productos y crear carritos
-- Si el cliente quiere comprar algo, usa create_cart
-- Si el cliente quiere cambiar un carrito, usa update_cart
-- Presenta los productos de forma atractiva con precios
+- Si menciona comprar/carrito, pregunta qué productos y cantidades
+- Presenta productos con nombre, precio y descripción
+- Responde en español y sé conversacional
 
-Responde en español y sé conversacional."""
-                    },
-                    {"role": "user", "content": message}
-                ],
-                functions=[
-                    {
-                        "name": "get_products",
-                        "description": "Obtiene lista de productos, con filtro opcional",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "search_query": {
-                                    "type": "string",
-                                    "description": "Término de búsqueda opcional para filtrar productos"
-                                }
-                            }
-                        }
-                    },
-                    {
-                        "name": "get_product_detail", 
-                        "description": "Obtiene detalles de un producto específico",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "product_id": {
-                                    "type": "integer",
-                                    "description": "ID del producto"
-                                }
-                            },
-                            "required": ["product_id"]
-                        }
-                    },
-                    {
-                        "name": "create_cart",
-                        "description": "Crea un nuevo carrito con productos",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "items": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "product_id": {"type": "integer"},
-                                            "qty": {"type": "integer"}
-                                        }
-                                    },
-                                    "description": "Lista de productos y cantidades"
-                                }
-                            },
-                            "required": ["items"]
-                        }
-                    },
-                    {
-                        "name": "update_cart",
-                        "description": "Actualiza un carrito existente",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "cart_id": {
-                                    "type": "integer",
-                                    "description": "ID del carrito a actualizar"
-                                },
-                                "items": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "product_id": {"type": "integer"},
-                                            "qty": {"type": "integer"}
-                                        }
-                                    },
-                                    "description": "Lista actualizada de productos y cantidades"
-                                }
-                            },
-                            "required": ["cart_id", "items"]
-                        }
-                    }
-                ],
-                function_call="auto"
-            )
+IMPORTANTE: Analiza el mensaje del usuario y determina si necesitas:
+1. Mostrar productos (usa: ACCION:get_products)
+2. Buscar productos (usa: ACCION:search_products:término_búsqueda)  
+3. Ver detalle producto (usa: ACCION:get_product:ID)
+4. Crear carrito (usa: ACCION:create_cart:productos_y_cantidades)
+5. Solo conversar (responde directamente)
+
+"""
+
+            full_prompt = f"{system_prompt}\n\nUsuario: {message}"
             
-            message_response = response.choices[0].message
+            response = self.model.generate_content(full_prompt)
+            response_text = response.text
             
-            # Si OpenAI quiere llamar una función
-            if message_response.function_call:
-                function_name = message_response.function_call.name
-                function_args = json.loads(message_response.function_call.arguments)
-                
-                # Ejecutar la función correspondiente
-                if function_name == "get_products":
-                    result = self.get_products_api(function_args.get('search_query'))
-                elif function_name == "get_product_detail":
-                    result = self.get_product_detail_api(function_args['product_id'])
-                elif function_name == "create_cart":
-                    result = self.create_cart_api(function_args['items'])
-                elif function_name == "update_cart":
-                    result = self.update_cart_api(function_args['cart_id'], function_args['items'])
-                else:
-                    result = "Función no encontrada"
-                
-                # Segunda llamada con el resultado de la función
-                second_response = self.client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": """Eres un asistente de ventas de Laburen.com. 
-                            Presenta la información de forma amigable con emojis."""
-                        },
-                        {"role": "user", "content": message},
-                        message_response,
-                        {
-                            "role": "function",
-                            "name": function_name,
-                            "content": str(result)
-                        }
-                    ]
-                )
-                
-                return second_response.choices[0].message.content
+            # Verificar si Gemini quiere ejecutar alguna acción
+            if "ACCION:" in response_text:
+                lines = response_text.split('\n')
+                for line in lines:
+                    if "ACCION:" in line:
+                        action_line = line.strip()
+                        
+                        if "get_products" in action_line:
+                            products_result = self.get_products_api()
+                            # Segunda llamada con los resultados
+                            follow_up_prompt = f"""Usuario preguntó: {message}
+
+Productos disponibles:
+{products_result}
+
+Presenta esta información de forma amigable con emojis, incluyendo nombres, precios y una breve descripción."""
+                            
+                            final_response = self.model.generate_content(follow_up_prompt)
+                            return final_response.text
+                        
+                        elif "search_products:" in action_line:
+                            search_term = action_line.split("search_products:")[1].strip()
+                            search_result = self.get_products_api(search_term)
+                            
+                            follow_up_prompt = f"""Usuario buscó: {message}
+
+Resultados de búsqueda para "{search_term}":
+{search_result}
+
+Presenta los resultados de forma atractiva con emojis."""
+                            
+                            final_response = self.model.generate_content(follow_up_prompt)
+                            return final_response.text
+                        
+                        elif "get_product:" in action_line:
+                            try:
+                                product_id = int(action_line.split("get_product:")[1].strip())
+                                product_result = self.get_product_detail_api(product_id)
+                                
+                                follow_up_prompt = f"""Usuario preguntó por producto: {message}
+
+Detalle del producto:
+{product_result}
+
+Presenta esta información de forma detallada y atractiva con emojis."""
+                                
+                                final_response = self.model.generate_content(follow_up_prompt)
+                                return final_response.text
+                            except:
+                                pass
             
-            else:
-                return message_response.content
+            # Si no hay acciones específicas, devolver la respuesta directa
+            return response_text.replace("ACCION:", "").strip()
                 
         except Exception as e:
-            print(f"Error con OpenAI: {e}")
+            print(f"Error con Gemini: {e}")
             return self._simple_logic(message)
     
     def _simple_logic(self, message):
