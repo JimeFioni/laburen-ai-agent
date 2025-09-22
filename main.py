@@ -13,6 +13,74 @@ from dotenv import load_dotenv
 # Cargar variables de entorno
 load_dotenv()
 
+# Función para inicializar la base de datos
+def initialize_database():
+    """Inicializa la base de datos con las tablas y productos desde Excel"""
+    try:
+        conn = sqlite3.connect('laburen_app.db')
+        cursor = conn.cursor()
+        
+        # Verificar si la tabla products existe
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='products';")
+        if cursor.fetchone():
+            print("✅ Tabla 'products' ya existe")
+            conn.close()
+            return
+        
+        # Crear tabla products
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            price REAL NOT NULL,
+            stock INTEGER NOT NULL,
+            category TEXT
+        )
+        ''')
+        
+        # Crear tabla cart_items
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cart_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER,
+            qty INTEGER,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products (id)
+        )
+        ''')
+        
+        # Cargar productos desde Excel si existe
+        if os.path.exists('products.xlsx'):
+            print("📊 Cargando productos desde Excel...")
+            df = pd.read_excel('products.xlsx')
+            
+            for _, row in df.iterrows():
+                cursor.execute('''
+                INSERT INTO products (name, description, price, stock, category)
+                VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    row['name'],
+                    row['description'],
+                    row['price'],
+                    row['stock'],
+                    row.get('category', 'General')
+                ))
+            
+            print(f"✅ Cargados {len(df)} productos")
+        else:
+            print("⚠️ Archivo products.xlsx no encontrado - BD creada sin productos")
+        
+        conn.commit()
+        conn.close()
+        print("✅ Base de datos inicializada correctamente")
+        
+    except Exception as e:
+        print(f"❌ Error inicializando BD: {e}")
+
+# Inicializar BD al arrancar la aplicación
+initialize_database()
+
 # Crear aplicación FastAPI
 app = FastAPI(
     title="Laburen.com API",
@@ -317,6 +385,47 @@ def update_cart(cart_id: int, cart_data: CartCreate):
 def health():
     return {"status": "ok"}
 
+@app.get("/debug/database")
+def debug_database():
+    """Endpoint para verificar el estado de la base de datos"""
+    try:
+        conn = sqlite3.connect('laburen_app.db')
+        cursor = conn.cursor()
+        
+        # Verificar tablas existentes
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        result = {
+            "status": "ok",
+            "database": "laburen_app.db",
+            "tables": tables
+        }
+        
+        # Si existe la tabla products, contar registros
+        if 'products' in tables:
+            cursor.execute('SELECT COUNT(*) FROM products')
+            product_count = cursor.fetchone()[0]
+            result["product_count"] = product_count
+            
+            # Mostrar algunos productos de ejemplo
+            cursor.execute('SELECT id, name, price FROM products LIMIT 5')
+            samples = cursor.fetchall()
+            result["sample_products"] = [
+                {"id": row[0], "name": row[1], "price": row[2]} 
+                for row in samples
+            ]
+        
+        conn.close()
+        return result
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "database": "laburen_app.db"
+        }
+
 import requests
 import google.generativeai as genai
 
@@ -480,7 +589,7 @@ Presenta esta información de forma detallada y atractiva con emojis."""
     def _get_products_direct(self, search_query=None):
         """Acceso directo a la base de datos como fallback"""
         try:
-            conn = sqlite3.connect('products.db')
+            conn = sqlite3.connect('laburen_app.db')
             cursor = conn.cursor()
             
             if search_query:
