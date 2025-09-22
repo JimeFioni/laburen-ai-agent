@@ -648,6 +648,55 @@ async def whatsapp_webhook(request: dict):
         print(f"❌ Error procesando webhook: {e}")
         return {"status": "error", "message": str(e)}
 
+# Webhook para Twilio WhatsApp
+@app.post("/twilio-webhook")
+async def twilio_whatsapp_webhook(Body: str = Form(...), From: str = Form(...)):
+    """Webhook para Twilio WhatsApp - Formato más simple"""
+    try:
+        print(f"📱 Mensaje Twilio de {From}: {Body}")
+        
+        # Procesar con AI Agent
+        ai_response = ai_agent.process_message(Body, From)
+        print(f"🤖 Respuesta AI: {ai_response}")
+        
+        # Enviar respuesta usando Twilio
+        send_twilio_message(From, ai_response)
+        
+        return {"status": "success"}
+    
+    except Exception as e:
+        print(f"❌ Error procesando webhook Twilio: {e}")
+        return {"status": "error", "message": str(e)}
+
+# Función para enviar mensajes vía Twilio
+def send_twilio_message(to_number: str, message: str):
+    """Envía un mensaje de respuesta usando Twilio"""
+    try:
+        from twilio.rest import Client
+        
+        account_sid = os.getenv('TWILIO_ACCOUNT_SID')
+        auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+        from_number = os.getenv('TWILIO_WHATSAPP_FROM', 'whatsapp:+14155238886')
+        
+        if not account_sid or not auth_token:
+            print("❌ Faltan credenciales de Twilio")
+            return False
+            
+        client = Client(account_sid, auth_token)
+        
+        message_response = client.messages.create(
+            body=message,
+            from_=from_number,
+            to=to_number  # Twilio espera formato whatsapp:+1234567890
+        )
+        
+        print(f"✅ Mensaje Twilio enviado: {message_response.sid}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error enviando mensaje Twilio: {e}")
+        return False
+
 @app.get("/webhook")
 def verify_whatsapp_webhook(
     mode: str = Query(alias="hub.mode"), 
