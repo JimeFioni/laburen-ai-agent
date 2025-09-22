@@ -7,11 +7,6 @@
 [![Gemini](https://img.shields.io/badge/Gemini-1.5--flash-4285F4.svg)](https://ai.google.dev)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-003B57.svg)](https://sqlite.org)
 
-## 🎥 Demo Video
-
-<div style="position: relative; padding-bottom: 65.01809408926417%; height: 0;"><iframe src="https://www.loom.com/embed/6e0fd0fcd5bc4322ace48c116c91e1db?sid=ce2ae782-8b0f-498b-9b8f-34ab08b8c58a" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></iframe></div>
-
-> 🚀 **Video demo**: Mira el AI Agent funcionando en tiempo real con WhatsApp + Gemini AI
 
 ## 🚀 Quick Start
 
@@ -212,11 +207,17 @@ TWILIO_WHATSAPP_NUMBER=+14155238886
 
 **Ver guía completa**: [docs/WHATSAPP_DEPLOYMENT.md](docs/WHATSAPP_DEPLOYMENT.md)
 
-## 🎉 Demo en Vivo
+## 📹 Video Demo
+
+[![Ver Demo en Video](https://img.youtube.com/vi/7-PL7tgfa8M/maxresdefault.jpg)](https://youtu.be/7-PL7tgfa8M)
+
+*Haz clic en la imagen para ver una demostración completa del sistema*
+
+### 🎯 Links de Prueba
 
 **🔗 API Producción**: https://laburen-ai-agent.onrender.com/docs  
 **🧪 Testing**: https://laburen-ai-agent.onrender.com/test/hola  
-**📱 WhatsApp**: Twilio Sandbox +1 415 523 8886
+**📱 WhatsApp**: Twilio Sandbox +1 415 523 8886  
 **🔍 Debug**: https://laburen-ai-agent.onrender.com/debug/database
 
 ---
