@@ -568,17 +568,85 @@ Presenta esta información de forma detallada y atractiva con emojis."""
 # Instanciar agente
 ai_agent = AIAgent()
 
-@app.post("/webhook")
-def whatsapp_webhook(Body: str = Form(...), From: str = Form(...)):
-    """Webhook para WhatsApp"""
+# Función para enviar mensajes de WhatsApp
+def send_whatsapp_message(to_number: str, message: str):
+    """Envía un mensaje de respuesta a WhatsApp"""
     try:
-        response = ai_agent.process_message(Body, From)
-        print(f"📱 {From}: {Body}")
-        print(f"🤖 Respuesta: {response}")
-        return {"message": response}
+        whatsapp_token = os.getenv('WHATSAPP_TOKEN')
+        phone_number_id = os.getenv('WHATSAPP_PHONE_NUMBER_ID')
+        
+        if not whatsapp_token or not phone_number_id:
+            print("❌ Faltan tokens de WhatsApp")
+            return False
+            
+        url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
+        
+        headers = {
+            "Authorization": f"Bearer {whatsapp_token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "messaging_product": "whatsapp",
+            "to": to_number,
+            "type": "text",
+            "text": {
+                "body": message
+            }
+        }
+        
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code == 200:
+            print(f"✅ Mensaje enviado a {to_number}")
+            return True
+        else:
+            print(f"❌ Error enviando mensaje: {response.status_code} - {response.text}")
+            return False
+            
     except Exception as e:
-        print(f"❌ Error: {e}")
-        return {"message": "Lo siento, hubo un error. Intenta de nuevo."}
+        print(f"❌ Error enviando mensaje: {e}")
+        return False
+
+@app.post("/webhook")
+async def whatsapp_webhook(request: dict):
+    """Webhook para WhatsApp Business API - Recibe mensajes en formato JSON"""
+    try:
+        # Procesar webhook de WhatsApp Business API
+        if "entry" in request:
+            for entry in request["entry"]:
+                for change in entry.get("changes", []):
+                    if change.get("field") == "messages":
+                        value = change.get("value", {})
+                        
+                        # Extraer mensajes
+                        messages = value.get("messages", [])
+                        for message in messages:
+                            # Obtener datos del mensaje
+                            from_number = message.get("from", "")
+                            message_body = ""
+                            
+                            # Diferentes tipos de mensaje
+                            if "text" in message:
+                                message_body = message["text"].get("body", "")
+                            elif "interactive" in message:
+                                message_body = message["interactive"].get("button_reply", {}).get("title", "")
+                            
+                            print(f"📱 Mensaje de {from_number}: {message_body}")
+                            
+                            # Procesar con AI Agent
+                            if message_body:
+                                ai_response = ai_agent.process_message(message_body, from_number)
+                                print(f"🤖 Respuesta AI: {ai_response}")
+                                
+                                # Enviar respuesta de vuelta a WhatsApp
+                                send_whatsapp_message(from_number, ai_response)
+        
+        return {"status": "success"}
+    
+    except Exception as e:
+        print(f"❌ Error procesando webhook: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/webhook")
 def verify_whatsapp_webhook(
