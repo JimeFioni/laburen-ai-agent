@@ -593,12 +593,13 @@ Presenta esta información de forma detallada y atractiva con emojis."""
             cursor = conn.cursor()
             
             if search_query:
+                # Solo buscar en name y description (sin category)
                 cursor.execute('''
-                    SELECT * FROM products 
-                    WHERE LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(category) LIKE ?
-                ''', (f'%{search_query.lower()}%', f'%{search_query.lower()}%', f'%{search_query.lower()}%'))
+                    SELECT id, name, description, price, stock FROM products 
+                    WHERE LOWER(name) LIKE ? OR LOWER(description) LIKE ?
+                ''', (f'%{search_query.lower()}%', f'%{search_query.lower()}%'))
             else:
-                cursor.execute('SELECT * FROM products LIMIT 20')
+                cursor.execute('SELECT id, name, description, price, stock FROM products LIMIT 20')
             
             rows = cursor.fetchall()
             conn.close()
@@ -615,7 +616,7 @@ Presenta esta información de forma detallada y atractiva con emojis."""
                     'description': row[2],
                     'price': row[3],
                     'stock': row[4],
-                    'category': row[5]
+                    'category': 'General'  # Valor por defecto ya que no existe la columna
                 })
             
             return self._format_products_response(products, search_query)
@@ -668,10 +669,10 @@ Presenta esta información de forma detallada y atractiva con emojis."""
     def _get_product_detail_direct(self, product_id):
         """Acceso directo a la base de datos para detalle de producto"""
         try:
-            conn = sqlite3.connect('products.db')
+            conn = sqlite3.connect('laburen_app.db')
             cursor = conn.cursor()
             
-            cursor.execute('SELECT * FROM products WHERE id = ?', (product_id,))
+            cursor.execute('SELECT id, name, description, price, stock FROM products WHERE id = ?', (product_id,))
             row = cursor.fetchone()
             conn.close()
             
@@ -684,7 +685,7 @@ Presenta esta información de forma detallada y atractiva con emojis."""
                 'description': row[2],
                 'price': row[3],
                 'stock': row[4],
-                'category': row[5]
+                'category': 'General'  # Valor por defecto
             }
             
             return self._format_product_detail(product)
