@@ -329,7 +329,8 @@ class AIAgent:
             self.model = genai.GenerativeModel('gemini-1.5-flash')
         else:
             self.model = None
-        self.base_url = "http://localhost:8000"
+        # Usar URL dinámica - Render o local
+        self.base_url = os.getenv('API_BASE_URL', 'https://laburen-ai-agent.onrender.com')
         
     def process_message(self, message: str, phone: str) -> str:
         """Procesa mensajes usando Gemini y consume la API"""
