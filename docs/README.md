@@ -7,8 +7,8 @@
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   WhatsApp API  │    │   Agente de IA  │    │   API REST      │
-│                 │    │   (OpenAI +     │    │   (FastAPI)     │
-│  - Recibe msgs  │◄──►│    Functions)   │◄──►│                 │
+│                 │    │   (Gemini +     │    │   (FastAPI)     │
+│  - Recibe msgs  │◄──►│    Fallback)    │◄──►│                 │
 │  - Envía resp.  │    │                 │    │  - GET products │
 └─────────────────┘    └─────────────────┘    │  - POST carts   │
                                                │  - PATCH carts  │
@@ -28,8 +28,8 @@
 
 - **Backend**: FastAPI (Python 3.13+)
 - **Base de Datos**: SQLite (desarrollo) / PostgreSQL (producción)
-- **IA**: OpenAI GPT-3.5-turbo con Function Calling
-- **WhatsApp**: WhatsApp Business API webhook
+- **IA**: Google Gemini 1.5-flash con sistema de fallback
+- **WhatsApp**: Twilio WhatsApp Sandbox
 - **ORM**: SQLAlchemy
 - **Datos**: Pandas + OpenPyXL para carga desde Excel
 
@@ -63,7 +63,7 @@ graph TD
     Q --> R[PATCH /carts/:id con items]
     R --> S[Carrito actualizado]
     
-    G --> T[OpenAI genera respuesta natural]
+    G --> T[Gemini genera respuesta natural]
     J --> T
     M --> T
     P --> T
@@ -189,12 +189,13 @@ CREATE TABLE carts (
 ### 6.1 Variables de Entorno
 
 ```bash
-# Opcional - mejora respuestas del agente
-OPENAI_API_KEY=tu_api_key_aqui
+# Requerido - mejora respuestas del agente
+GEMINI_API_KEY=tu_gemini_api_key_aqui
 
-# Para despliegue en WhatsApp
-WHATSAPP_TOKEN=tu_whatsapp_token_aqui
-WHATSAPP_VERIFY_TOKEN=tu_verify_token_aqui
+# Para despliegue en WhatsApp con Twilio
+TWILIO_ACCOUNT_SID=tu_twilio_sid_aqui
+TWILIO_AUTH_TOKEN=tu_twilio_token_aqui
+TWILIO_WHATSAPP_NUMBER=+1415523xxxx
 ```
 
 ### 6.2 Instalación y Ejecución
@@ -216,4 +217,4 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ---
 
 *Documentación generada para el Desafío Técnico de Laburen.com*
-*Fecha: Enero 2025*
+*Fecha: Septiembre 2025*
