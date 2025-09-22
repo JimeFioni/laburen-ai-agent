@@ -447,12 +447,13 @@ Presenta esta información de forma detallada y atractiva con emojis."""
             return "🤔 Puedo ayudarte con:\n\n• 'productos' - Ver catálogo\n• 'buscar [término]' - Buscar específico\n• 'quiero comprar...' - Crear carrito\n\n¿Qué necesitas?"
     
     def get_products_api(self, search_query=None):
-        """Consume GET /products de la API"""
+        """Consume GET /products de la API con fallback directo a BD"""
         try:
+            # Intentar conexión HTTP primero con timeout más largo
             url = f"{self.base_url}/products"
             params = {"q": search_query} if search_query else {}
             
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=30)
             response.raise_for_status()
             
             products = response.json()
@@ -460,50 +461,141 @@ Presenta esta información de forma detallada y atractiva con emojis."""
             if not products:
                 return "❌ No se encontraron productos"
             
-            if search_query:
-                result = f"🔍 *RESULTADOS PARA '{search_query.upper()}'*\n\n"
-            else:
-                result = "🛍️ *PRODUCTOS DISPONIBLES:*\n\n"
+            return self._format_products_response(products, search_query)
             
-            for product in products[:10]:  # Máximo 10 productos
-                result += f"🔸 *{product['name']}*\n"
-                result += f"   💰 ${product['price']:.2f}\n"
-                result += f"   📦 Stock: {product['stock']}\n"
-                result += f"   ID: {product['id']}\n\n"
-            
-            if len(products) > 10:
-                result += f"... y {len(products) - 10} productos más"
-            
-            return result
+        except requests.exceptions.Timeout:
+            # Fallback: acceso directo a la base de datos
+            print(f"Timeout en API, usando acceso directo a BD para búsqueda: {search_query}")
+            return self._get_products_direct(search_query)
             
         except requests.exceptions.RequestException as e:
-            return f"❌ Error conectando con la API: {e}"
+            print(f"Error HTTP: {e}")
+            # Fallback: acceso directo a la base de datos
+            return self._get_products_direct(search_query)
+            
         except Exception as e:
-            return f"❌ Error: {e}"
+            print(f"Error inesperado: {e}")
+            return f"❌ Error temporal del sistema. Intenta de nuevo en unos segundos. 🔄"
+    
+    def _get_products_direct(self, search_query=None):
+        """Acceso directo a la base de datos como fallback"""
+        try:
+            conn = sqlite3.connect('products.db')
+            cursor = conn.cursor()
+            
+            if search_query:
+                cursor.execute('''
+                    SELECT * FROM products 
+                    WHERE LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(category) LIKE ?
+                ''', (f'%{search_query.lower()}%', f'%{search_query.lower()}%', f'%{search_query.lower()}%'))
+            else:
+                cursor.execute('SELECT * FROM products LIMIT 20')
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            if not rows:
+                return f"❌ No se encontraron productos para '{search_query}'" if search_query else "❌ No hay productos disponibles"
+            
+            # Convertir a formato similar al JSON de la API
+            products = []
+            for row in rows:
+                products.append({
+                    'id': row[0],
+                    'name': row[1],
+                    'description': row[2],
+                    'price': row[3],
+                    'stock': row[4],
+                    'category': row[5]
+                })
+            
+            return self._format_products_response(products, search_query)
+            
+        except Exception as e:
+            print(f"Error acceso directo BD: {e}")
+            return f"❌ Error accediendo a la base de datos. Intenta más tarde. 😔"
+    
+    def _format_products_response(self, products, search_query=None):
+        """Formatea la respuesta de productos de manera consistente"""
+        if search_query:
+            result = f"🔍 *RESULTADOS PARA '{search_query.upper()}'*\n\n"
+        else:
+            result = "🛍️ *PRODUCTOS DISPONIBLES:*\n\n"
+        
+        for product in products[:10]:  # Máximo 10 productos
+            result += f"🔸 *{product['name']}*\n"
+            result += f"   💰 ${product['price']:.2f}\n"
+            result += f"   📦 Stock: {product['stock']}\n"
+            result += f"   🏷️ {product['category']}\n"
+            result += f"   ID: {product['id']}\n\n"
+        
+        if len(products) > 10:
+            result += f"... y {len(products) - 10} productos más\n\n"
+        
+        result += "💡 *¿Necesitas más detalles de algún producto específico?*"
+        return result
     
     def get_product_detail_api(self, product_id):
-        """Consume GET /products/:id de la API"""
+        """Consume GET /products/:id de la API con fallback a BD directa"""
         try:
-            response = requests.get(f"{self.base_url}/products/{product_id}", timeout=10)
+            response = requests.get(f"{self.base_url}/products/{product_id}", timeout=30)
             response.raise_for_status()
             
             product = response.json()
+            return self._format_product_detail(product)
             
-            result = f"🔍 *DETALLE DEL PRODUCTO*\n\n"
-            result += f"🔸 *{product['name']}*\n"
-            result += f"📝 {product['description']}\n"
-            result += f"💰 ${product['price']:.2f}\n"
-            result += f"📦 Stock: {product['stock']}\n"
-            result += f"🆔 ID: {product['id']}"
+        except requests.exceptions.Timeout:
+            print(f"Timeout en API, usando acceso directo a BD para producto {product_id}")
+            return self._get_product_detail_direct(product_id)
             
-            return result
+        except requests.exceptions.RequestException as e:
+            print(f"Error HTTP: {e}")
+            return self._get_product_detail_direct(product_id)
             
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                return "❌ Producto no encontrado"
-            return f"❌ Error HTTP: {e}"
         except Exception as e:
-            return f"❌ Error: {e}"
+            print(f"Error inesperado: {e}")
+            return f"❌ Error temporal del sistema. Intenta de nuevo en unos segundos. 🔄"
+    
+    def _get_product_detail_direct(self, product_id):
+        """Acceso directo a la base de datos para detalle de producto"""
+        try:
+            conn = sqlite3.connect('products.db')
+            cursor = conn.cursor()
+            
+            cursor.execute('SELECT * FROM products WHERE id = ?', (product_id,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                return f"❌ Producto con ID {product_id} no encontrado"
+            
+            product = {
+                'id': row[0],
+                'name': row[1],
+                'description': row[2],
+                'price': row[3],
+                'stock': row[4],
+                'category': row[5]
+            }
+            
+            return self._format_product_detail(product)
+            
+        except Exception as e:
+            print(f"Error acceso directo BD: {e}")
+            return f"❌ Error accediendo a la base de datos. Intenta más tarde. 😔"
+    
+    def _format_product_detail(self, product):
+        """Formatea el detalle de un producto"""
+        result = f"🔍 *DETALLE DEL PRODUCTO*\n\n"
+        result += f"🔸 *{product['name']}*\n"
+        result += f"📝 {product['description']}\n"
+        result += f"💰 ${product['price']:.2f}\n"
+        result += f"📦 Stock: {product['stock']}\n"
+        result += f"🏷️ Categoría: {product['category']}\n"
+        result += f"🆔 ID: {product['id']}\n\n"
+        result += "💡 *¿Te gustaría agregarlo al carrito?*"
+        
+        return result
     
     def create_cart_api(self, items):
         """Consume POST /carts de la API"""
