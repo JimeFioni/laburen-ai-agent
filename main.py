@@ -24,6 +24,21 @@ def initialize_database():
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='products';")
         if cursor.fetchone():
             print("✅ Tabla 'products' ya existe")
+            # Verificar y crear tabla carts si no existe
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='carts';")
+            if not cursor.fetchone():
+                print("📦 Creando tabla 'carts'...")
+                cursor.execute('''
+                CREATE TABLE carts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    items TEXT NOT NULL,
+                    total_amount REAL NOT NULL,
+                    total_items INTEGER NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+                ''')
+                conn.commit()
+                print("✅ Tabla 'carts' creada")
             conn.close()
             return
         
@@ -39,14 +54,14 @@ def initialize_database():
         )
         ''')
         
-        # Crear tabla cart_items
+        # Crear tabla carts
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS cart_items (
+        CREATE TABLE carts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product_id INTEGER,
-            qty INTEGER,
-            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (product_id) REFERENCES products (id)
+            items TEXT NOT NULL,
+            total_amount REAL NOT NULL,
+            total_items INTEGER NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         ''')
         
@@ -120,35 +135,7 @@ class CartResponse(BaseModel):
     created_at: str
 
 # Funciones de base de datos
-def init_db():
-    """Inicializar base de datos SQLite"""
-    conn = sqlite3.connect('laburen_app.db')
-    cursor = conn.cursor()
-    
-    # Crear tabla productos
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT,
-            price REAL NOT NULL,
-            stock INTEGER NOT NULL
-        )
-    ''')
-    
-    # Crear tabla carritos
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS carts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            items TEXT NOT NULL,
-            total_amount REAL NOT NULL,
-            total_items INTEGER NOT NULL,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
+# Endpoints para carrito
 
 def load_products():
     """Cargar productos desde Excel"""
@@ -185,9 +172,8 @@ def load_products():
     except Exception as e:
         print(f"❌ Error cargando productos: {e}")
 
-# Inicializar al arrancar
-init_db()
-load_products()
+# La inicialización se hará bajo demanda en initialize_database()
+# load_products() - ya no es necesario, los productos se cargan en initialize_database()
 
 # Endpoints de la API
 
