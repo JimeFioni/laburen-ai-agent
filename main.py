@@ -378,35 +378,33 @@ def debug_database():
         conn = sqlite3.connect('laburen_app.db')
         cursor = conn.cursor()
         
-        # Verificar estructura de tabla products
-        cursor.execute("PRAGMA table_info(products)")
-        products_info = cursor.fetchall()
+        # Listar todas las tablas
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cursor.fetchall()]
         
-        # Verificar estructura de tabla carts
+        # Verificar estructura de tabla carts específicamente
         cursor.execute("PRAGMA table_info(carts)")
-        carts_info = cursor.fetchall()
+        carts_columns = cursor.fetchall()
         
-        # Contar registros
+        # Obtener ejemplo de productos
+        cursor.execute("SELECT id, name, price FROM products LIMIT 5")
+        sample_products = [{"id": row[0], "name": row[1], "price": row[2]} for row in cursor.fetchall()]
+        
+        # Contar productos
         cursor.execute("SELECT COUNT(*) FROM products")
-        products_count = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM carts")
-        carts_count = cursor.fetchone()[0]
+        product_count = cursor.fetchone()[0]
         
         conn.close()
         
         return {
             "status": "ok",
-            "tables": {
-                "products": {
-                    "columns": [{"name": col[1], "type": col[2]} for col in products_info],
-                    "count": products_count
-                },
-                "carts": {
-                    "columns": [{"name": col[1], "type": col[2]} for col in carts_info],
-                    "count": carts_count
-                }
-            }
+            "database": "laburen_app.db",
+            "tables": tables,
+            "carts_structure": {
+                "columns": [{"id": col[0], "name": col[1], "type": col[2], "not_null": col[3], "default": col[4], "pk": col[5]} for col in carts_columns]
+            },
+            "product_count": product_count,
+            "sample_products": sample_products
         }
         
     except Exception as e:
