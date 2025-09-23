@@ -462,7 +462,7 @@ Tienes acceso a estas funciones de API:
 INSTRUCCIONES:
 - Siempre sé amigable y usa emojis
 - Ayuda al cliente a encontrar productos y crear carritos
-- Si menciona comprar/carrito, pregunta qué productos y cantidades
+- Si menciona comprar/carrito, ayúdalo a crear o modificar carritos
 - Presenta productos con nombre, precio y descripción
 - Responde en español y sé conversacional
 
@@ -470,8 +470,22 @@ IMPORTANTE: Analiza el mensaje del usuario y determina si necesitas:
 1. Mostrar productos (usa: ACCION:get_products)
 2. Buscar productos (usa: ACCION:search_products:término_búsqueda)  
 3. Ver detalle producto (usa: ACCION:get_product:ID)
-4. Crear carrito (usa: ACCION:create_cart:productos_y_cantidades)
-5. Solo conversar (responde directamente)
+4. Crear carrito (usa: ACCION:create_cart:product_id,qty;product_id,qty)
+5. Actualizar carrito (usa: ACCION:update_cart:cart_id:product_id,qty;product_id,qty)
+6. Solo conversar (responde directamente)
+
+EJEMPLOS DE USO DE CARRITOS:
+- Usuario: "quiero comprar el producto 15 cantidad 2" → ACCION:create_cart:15,2
+- Usuario: "agrega el producto 10 cantidad 3" → ACCION:create_cart:10,3  
+- Usuario: "quiero 2 del producto 5 y 1 del producto 8" → ACCION:create_cart:5,2;8,1
+- Usuario: "actualiza mi carrito 1, quiero 3 del producto 15" → ACCION:update_cart:1:15,3
+- Usuario: "elimina el producto 10 del carrito 2" → ACCION:update_cart:2:10,0
+
+NOTAS:
+- Para eliminar productos usa cantidad 0
+- Si no especifica ID de carrito, crea uno nuevo
+- Siempre pregunta por ID de productos si no lo menciona
+- Si no hay suficiente información, pide más detalles antes de actuar
 
 """
 
@@ -530,6 +544,72 @@ Presenta esta información de forma detallada y atractiva con emojis."""
                                 return final_response.text
                             except:
                                 pass
+                        
+                        elif "create_cart:" in action_line:
+                            try:
+                                # Parsear productos y cantidades: "create_cart:product_id,qty;product_id,qty"
+                                cart_data = action_line.split("create_cart:")[1].strip()
+                                items = []
+                                
+                                for item_str in cart_data.split(';'):
+                                    if ',' in item_str:
+                                        product_id, qty = item_str.split(',')
+                                        items.append({
+                                            "product_id": int(product_id.strip()),
+                                            "qty": int(qty.strip())
+                                        })
+                                
+                                if items:
+                                    cart_result = self.create_cart_api(items)
+                                    
+                                    follow_up_prompt = f"""Usuario quiso crear carrito: {message}
+
+Resultado:
+{cart_result}
+
+Presenta esta información de forma celebratoria con emojis."""
+                                    
+                                    final_response = self.model.generate_content(follow_up_prompt)
+                                    return final_response.text
+                                else:
+                                    return "❌ No pude entender qué productos agregar al carrito. ¿Puedes especificar el ID del producto y la cantidad?"
+                            except Exception as e:
+                                print(f"Error creando carrito: {e}")
+                                return "❌ Hubo un error al crear el carrito. ¿Puedes intentarlo de nuevo especificando el ID del producto y la cantidad?"
+                        
+                        elif "update_cart:" in action_line:
+                            try:
+                                # Parsear cart_id y productos: "update_cart:cart_id:product_id,qty;product_id,qty"
+                                parts = action_line.split("update_cart:")[1].strip()
+                                cart_id_str, cart_data = parts.split(':', 1)
+                                cart_id = int(cart_id_str.strip())
+                                
+                                items = []
+                                for item_str in cart_data.split(';'):
+                                    if ',' in item_str:
+                                        product_id, qty = item_str.split(',')
+                                        items.append({
+                                            "product_id": int(product_id.strip()),
+                                            "qty": int(qty.strip())
+                                        })
+                                
+                                if items:
+                                    cart_result = self.update_cart_api(cart_id, items)
+                                    
+                                    follow_up_prompt = f"""Usuario quiso actualizar carrito: {message}
+
+Resultado:
+{cart_result}
+
+Presenta esta información de forma positiva con emojis."""
+                                    
+                                    final_response = self.model.generate_content(follow_up_prompt)
+                                    return final_response.text
+                                else:
+                                    return "❌ No pude entender qué productos actualizar en el carrito."
+                            except Exception as e:
+                                print(f"Error actualizando carrito: {e}")
+                                return "❌ Hubo un error al actualizar el carrito. Verifica que el carrito exista y los datos sean correctos."
             
             # Si no hay acciones específicas, devolver la respuesta directa
             return response_text.replace("ACCION:", "").strip()
@@ -538,8 +618,48 @@ Presenta esta información de forma detallada y atractiva con emojis."""
             print(f"Error con Gemini: {e}")
             return self._simple_logic(message)
     
+    def _extract_product_info_from_message(self, message: str):
+        """Extrae IDs de productos y cantidades de mensajes naturales"""
+        import re
+        
+        # Patrones para detectar IDs y cantidades
+        # Ejemplos: "producto 15", "ID 10", "quiero 2 camisas", "3 del producto 5"
+        products = []
+        
+        # Patrón 1: "producto X cantidad Y" o "Y del producto X"
+        pattern1 = r"(?:(\d+)\s+(?:del\s+)?producto\s+(\d+)|producto\s+(\d+)\s+cantidad\s+(\d+))"
+        matches = re.findall(pattern1, message.lower())
+        
+        for match in matches:
+            if match[0] and match[1]:  # "Y del producto X"
+                qty = int(match[0])
+                product_id = int(match[1])
+                products.append({"product_id": product_id, "qty": qty})
+            elif match[2] and match[3]:  # "producto X cantidad Y"
+                product_id = int(match[2])
+                qty = int(match[3])
+                products.append({"product_id": product_id, "qty": qty})
+        
+        # Patrón 2: "ID X" seguido de cantidad en contexto
+        id_pattern = r"id[:\s]*(\d+)"
+        qty_pattern = r"(?:cantidad|cant|qty)[:\s]*(\d+)|(\d+)\s*(?:unidad|piezas?|items?)"
+        
+        ids = re.findall(id_pattern, message.lower())
+        qtys = re.findall(qty_pattern, message.lower())
+        
+        # Combinar IDs con cantidades encontradas
+        if ids and qtys:
+            for i, product_id in enumerate(ids):
+                qty = 1  # Por defecto 1
+                if i < len(qtys):
+                    qty_match = qtys[i]
+                    qty = int(qty_match[0]) if qty_match[0] else int(qty_match[1])
+                products.append({"product_id": int(product_id), "qty": qty})
+        
+        return products
+    
     def _simple_logic(self, message):
-        """Lógica simple cuando no hay OpenAI API key"""
+        """Lógica simple cuando no hay Gemini API key"""
         msg = message.lower().strip()
         
         if "hola" in msg or "buenos" in msg or "hi" in msg:
@@ -551,6 +671,18 @@ Presenta esta información de forma detallada y atractiva con emojis."""
         elif "buscar" in msg or "busca" in msg:
             search_term = msg.replace("buscar", "").replace("busca", "").strip()
             return self.get_products_api(search_term if search_term else None)
+        
+        elif any(word in msg for word in ["comprar", "carrito", "agregar", "añadir", "quiero"]):
+            # Intentar extraer información de productos
+            products = self._extract_product_info_from_message(message)
+            
+            if products:
+                # Crear carrito con los productos encontrados
+                cart_result = self.create_cart_api(products)
+                return f"🛒 He creado tu carrito:\n\n{cart_result}"
+            else:
+                # Si no se pudieron extraer productos, pedir más información
+                return "🛍️ ¡Perfecto! Te ayudo a crear un carrito.\n\n📝 Para agregar productos necesito:\n• ID del producto\n• Cantidad deseada\n\n💡 Ejemplo: 'quiero 2 del producto 15'\n\n¿Podrías decirme qué productos específicos te interesan?"
         
         else:
             return "🤔 Puedo ayudarte con:\n\n• 'productos' - Ver catálogo\n• 'buscar [término]' - Buscar específico\n• 'quiero comprar...' - Crear carrito\n\n¿Qué necesitas?"
