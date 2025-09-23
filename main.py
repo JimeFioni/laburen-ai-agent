@@ -613,7 +613,7 @@ Presenta esta información de forma positiva con emojis."""
         products = []
         
         # Patrón 1: "producto X cantidad Y" o "Y del producto X"
-        pattern1 = r"(?:(\d+)\s+(?:del\s+)?producto\s+(\d+)|producto\s+(\d+)\s+cantidad\s+(\d+))"
+        pattern1 = r"(?:(\d+)\s+(?:del\s+)?producto\s+(?:id\s+)?(\d+)|producto\s+(?:id\s+)?(\d+)\s+cantidad\s+(\d+))"
         matches = re.findall(pattern1, message.lower())
         
         for match in matches:
@@ -626,21 +626,43 @@ Presenta esta información de forma positiva con emojis."""
                 qty = int(match[3])
                 products.append({"product_id": product_id, "qty": qty})
         
-        # Patrón 2: "ID X" seguido de cantidad en contexto
-        id_pattern = r"id[:\s]*(\d+)"
-        qty_pattern = r"(?:cantidad|cant|qty)[:\s]*(\d+)|(\d+)\s*(?:unidad|piezas?|items?)"
+        # Patrón 2: "quiero/quiero [cantidad] [producto] id [numero]"
+        pattern2 = r"(?:quiero|agregar?|añadir)\s+(\d+)?\s*(?:producto|del\s+producto)?\s*id\s+(\d+)"
+        matches2 = re.findall(pattern2, message.lower())
         
-        ids = re.findall(id_pattern, message.lower())
-        qtys = re.findall(qty_pattern, message.lower())
+        for match in matches2:
+            qty = int(match[0]) if match[0] else 1  # Si no hay cantidad, usar 1
+            product_id = int(match[1])
+            products.append({"product_id": product_id, "qty": qty})
         
-        # Combinar IDs con cantidades encontradas
-        if ids and qtys:
-            for i, product_id in enumerate(ids):
-                qty = 1  # Por defecto 1
-                if i < len(qtys):
-                    qty_match = qtys[i]
-                    qty = int(qty_match[0]) if qty_match[0] else int(qty_match[1])
-                products.append({"product_id": int(product_id), "qty": qty})
+        # Patrón 3: "ID X" seguido de cantidad en contexto
+        if not products:  # Solo si no encontramos nada anterior
+            id_pattern = r"id[:\s]*(\d+)"
+            qty_pattern = r"(?:quiero|agregar?|añadir)\s+(\d+)|(\d+)\s*(?:unidad|piezas?|items?)"
+            
+            ids = re.findall(id_pattern, message.lower())
+            qtys = re.findall(qty_pattern, message.lower())
+            
+            # Si encontramos "quiero X" y "id Y", combinarlos
+            if ids:
+                qty = 1  # Por defecto
+                if qtys:
+                    for qty_match in qtys:
+                        if qty_match[0]:  # "quiero X"
+                            qty = int(qty_match[0])
+                            break
+                        elif qty_match[1]:  # "X unidades"
+                            qty = int(qty_match[1])
+                            break
+                
+                for product_id in ids:
+                    products.append({"product_id": int(product_id), "qty": qty})
+        
+        # Debug: Imprimir lo que encontramos
+        if products:
+            print(f"🔍 Productos extraídos del mensaje '{message}': {products}")
+        else:
+            print(f"❌ No se pudieron extraer productos del mensaje '{message}'")
         
         return products
     
