@@ -412,7 +412,12 @@ def debug_database():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.post("/debug/fix-carts-table")
+@app.get("/debug/fix-carts-table")
+def fix_carts_table_get():
+    """Endpoint GET para corregir la estructura de la tabla carts"""
+    return fix_carts_table()
+
+@app.post("/debug/fix-carts-table")  
 def fix_carts_table():
     """Endpoint para corregir la estructura de la tabla carts"""
     try:
