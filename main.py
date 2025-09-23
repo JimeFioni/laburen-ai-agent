@@ -378,39 +378,83 @@ def debug_database():
         conn = sqlite3.connect('laburen_app.db')
         cursor = conn.cursor()
         
-        # Verificar tablas existentes
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = [row[0] for row in cursor.fetchall()]
+        # Verificar estructura de tabla products
+        cursor.execute("PRAGMA table_info(products)")
+        products_info = cursor.fetchall()
         
-        result = {
-            "status": "ok",
-            "database": "laburen_app.db",
-            "tables": tables
-        }
+        # Verificar estructura de tabla carts
+        cursor.execute("PRAGMA table_info(carts)")
+        carts_info = cursor.fetchall()
         
-        # Si existe la tabla products, contar registros
-        if 'products' in tables:
-            cursor.execute('SELECT COUNT(*) FROM products')
-            product_count = cursor.fetchone()[0]
-            result["product_count"] = product_count
-            
-            # Mostrar algunos productos de ejemplo
-            cursor.execute('SELECT id, name, price FROM products LIMIT 5')
-            samples = cursor.fetchall()
-            result["sample_products"] = [
-                {"id": row[0], "name": row[1], "price": row[2]} 
-                for row in samples
-            ]
+        # Contar registros
+        cursor.execute("SELECT COUNT(*) FROM products")
+        products_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM carts")
+        carts_count = cursor.fetchone()[0]
         
         conn.close()
-        return result
+        
+        return {
+            "status": "ok",
+            "tables": {
+                "products": {
+                    "columns": [{"name": col[1], "type": col[2]} for col in products_info],
+                    "count": products_count
+                },
+                "carts": {
+                    "columns": [{"name": col[1], "type": col[2]} for col in carts_info],
+                    "count": carts_count
+                }
+            }
+        }
         
     except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "database": "laburen_app.db"
-        }
+        return {"status": "error", "message": str(e)}
+
+@app.post("/debug/fix-carts-table")
+def fix_carts_table():
+    """Endpoint para corregir la estructura de la tabla carts"""
+    try:
+        conn = sqlite3.connect('laburen_app.db')
+        cursor = conn.cursor()
+        
+        # Verificar si la tabla carts tiene la columna items
+        cursor.execute("PRAGMA table_info(carts)")
+        columns = cursor.fetchall()
+        has_items_column = any(col[1] == 'items' for col in columns)
+        
+        if not has_items_column:
+            # Hacer backup de datos existentes si los hay
+            cursor.execute("SELECT * FROM carts")
+            existing_carts = cursor.fetchall()
+            
+            # Recrear la tabla con la estructura correcta
+            cursor.execute("DROP TABLE IF EXISTS carts")
+            cursor.execute('''
+            CREATE TABLE carts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                items TEXT NOT NULL,
+                total_amount REAL NOT NULL,
+                total_items INTEGER NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            ''')
+            
+            conn.commit()
+            conn.close()
+            
+            return {
+                "status": "fixed", 
+                "message": "Tabla carts recreada con estructura correcta",
+                "backup_count": len(existing_carts)
+            }
+        else:
+            conn.close()
+            return {"status": "ok", "message": "Tabla carts ya tiene la estructura correcta"}
+            
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 import requests
 import google.generativeai as genai
